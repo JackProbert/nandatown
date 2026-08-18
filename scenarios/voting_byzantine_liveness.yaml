@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: Apache-2.0
+# Voting scenario with one agent flagged Byzantine — see assessment/rationale.md
+name: voting_byzantine_liveness
+description: 1 proposer, 1 coordinator, 18 voters; one agent (5% of 20) flagged Byzantine
+  to test the coordinator's all-18 rendezvous.
+tier: 1
+seed: 42
+agents:
+  count: 20
+  brain: state-machine
+  roles:
+  - name: proposer
+    count: 1
+  - name: coordinator
+    count: 1
+  - name: voter
+    count: 18
+layers:
+  transport: in_memory
+  comms: nest_native
+  identity: did_key
+  registry: in_memory
+  auth: jwt
+  trust: score_average
+  payments: prepaid_credits
+  coordination: contract_net
+  negotiation: alternating_offers
+  memory: blackboard
+  privacy: noop
+  datafacts: datafacts_v1
+task:
+  type: voting
+  config:
+    rounds: 5
+    threshold: 0.5
+failures:
+  message_drop: 0.0
+  byzantine_agents: 0.05
+duration: 'ticks: 10000'
+metrics:
+- success_rate
+- message_count
+- agent_count
+output:
+  trace: ./traces/voting_byzantine_liveness.jsonl
