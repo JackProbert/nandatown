@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# Voting scenario with one agent flagged Byzantine — see assessment/rationale.md
+# Voting scenario with one agent flagged Byzantine — see assessment.md
 name: voting_byzantine_liveness
 description: 1 proposer, 1 coordinator, 18 voters; one agent (5% of 20) flagged Byzantine
   to test the coordinator's all-18 rendezvous.
