@@ -55,4 +55,3 @@ It would classify what kind of deviation happened — an unparseable-but-receive
 - `scenarios/voting_byzantine_liveness.yaml` — the scenario file for the change described above
 - `traces/voting_byzantine_liveness.jsonl` — the resulting trace
 - `assessment/exploration_log.md` — full Step-1 exploration (all settings tested, evidence, and reasoning)
-- `assessment/rationale.md` — why this setting was chosen over the alternatives
