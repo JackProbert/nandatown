@@ -1,12 +1,14 @@
-# Voting scenario: one Byzantine agent silently stalls the protocol
+# Voting scenario: Impact of a single byzantine agent on protocol
 
-**Scenario:** `voting` · **Setting changed:** `failures.byzantine_agents` (from `0.0` to `0.05`) · **Everything else unchanged** from `scenarios/voting.yaml` (seed 42, 5 rounds, threshold 0.5, 20 agents).
+**Scenario:** `voting` · **Setting changed:** `failures.byzantine_agents` (from `0.0` to `0.05`) · **Everything else unchanged** 
 
 ## Choice and hypothesis
 
-`voting`'s `CoordinatorAgent` tallies a round only once it has received a message from **all 18 voters** — no timeout, no quorum fallback. Before running anything, that's the fact the hypothesis rests on: **flagging even one agent Byzantine (`byzantine_agents: 0.05`, 1 of 20) should permanently stall every round**, since a flagged agent's messages arrive corrupted, so at least one required vote (or the proposal itself, if the proposer is the one flagged) never arrives intact. I also expected this to show up as some visible drop in `success_rate` — a reasonable guess turned out to be wrong (see Evidence/Investigation below), and that gap is the actual finding, not something I predicted going in.
+I changed failures.byzantine_agents from 0.0 to 0.05. 
 
-I chose `byzantine_agents` over `message_drop` specifically because it's deterministic — the flagged agent's message is corrupted on every single run — whereas `message_drop` is probabilistic and might not trigger at all on a given run. That meant I didn't need to raise the severity to guarantee seeing the effect: even the smallest nonzero fraction (one agent) was certain to produce it. Separately: `message_drop` breaks the same requirement and was tested too (0/5 rounds at every drop rate tried), so stalling itself isn't unique to Byzantine failures — what turned out to be unique is what happened to the metrics.
+I chose the byzantine agent because of the CoordinatorAgent in voting.py: shows the agent only sends a result once it has received 18 messages that all start with vote:. Byzantine corruption is also deterministic, the flagged agent's message is corrupted every run, whereas other settings e.g. message_drop are probabilistic and might not trigger at all. That means I don't need to raise the severity to see the effect: even the smallest fraction, one agent, is guaranteed to produce it.
+
+My hypothesis: one corrupted message will stall the round and lower success_rate.
 
 ## Evidence
 
@@ -29,11 +31,24 @@ Because it never matches `vote:`, round 1's tally sits at 17/18 forever — no `
 
 ## Investigation
 
-Cross-checked against `message_drop` (a probabilistic per-message failure) across the same range: drops *do* move `success_rate` visibly (1.000 → 0.273 as drop probability rises) even though they cause the same 0/5-rounds outcome. Byzantine corruption is the one failure mode invisible to both `success_rate` and the dashboard score at every tested severity (0.05–0.50) — the strongest, most surprising result across a ~19-run sweep that also covered `network_partition` (two variants) and the two `task.config` knobs (`rounds`, `threshold`), both of which behaved exactly as expected as non-failure controls.
+The success_rate did not lower as expected. When I trialled the message_drop as part of the tutorial, the scores dropped but here the success rate remained 1.000 despite the round not closing.
+I investigated by opening the raw JSONL trace. I isolated the flagged agent's send/receive pair byte-for-byte and confirmed the payload was corrupted but delivered, which is why 'receive' events still counted it.
+Reading metrics.py, I found success_rate is receives / sends i.e. how many sent messages arrived. This does not consider if the message was corrupted or not. This unearthed a blind spot. The scores and validators remained as is whilst the protocol failed to progress because a corrupted message satisfied the delivery check but failed the protocol's own check for a valid vote stalling the scenario.
+
 
 ## AI tool use
 
-I used Claude in an agentic coding session (shell and file access) throughout — first to quickly understand nandatown's scope and key files, then to design, run and assess the byzantine_agents experiment: writing a Python harness to drive the simulator directly (PyPI access was blocked, so I couldn't install the CLI's `typer` dependency; verified the harness against a byte-identical baseline trace) and render dashboard/table outputs, and finally for broader experimentation comparing byzantine_agents, message_drop, rounds and threshold sweeps at different severities. No other AI tools or outside human help. Full exploration log with all ~19 runs and the two other candidate settings considered is included in this PR alongside this README.
+I used Claude in an agentic coding session (shell and file access) throughout.
+First, to quickly understand nandatown's scope and the contents of key files at a high level.
+Second, to design, run and assess the byzantine_agents experiment - writing a Python harness to drive the simulator (PyPI access was blocked, so I couldn't install the CLI's typer dependency; verified the harness against a byte-identical baseline trace) and render dashboard/table outputs.
+Last, after investigation, I did some broader experimentation, comparing byzantine_agents, message_drop, rounds and threshold sweeps at different severities. 
+No other AI tools or outside human help.
+
+## What I'd build next
+
+I would build a root-cause analysis agent that runs after each round. It would compare the round's trace segment against a baseline run's expected pattern to catch what the scores and metrics miss.
+
+It would classify what kind of deviation happened — an unparseable-but-received payload means byzantine corruption, a dropped message means `message_drop` or a partition — then suggest a fix, like adding a timeout or lowering the vote threshold, so the coordinator isn't stuck waiting forever.
 
 ## Files in this PR
 
